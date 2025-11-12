@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitoring Suhu & Kelembapan</title>
+<link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet"/>
+<link href="https://cdn.datatables.net/1.13.1/css/dataTables.bootstrap4.min.css" rel="stylesheet"/>
+<style>
+body { padding-top: 56px; }
+.sidebar { height: 100vh; background-color: #343a40; color: white; position: fixed; top: 56px; left: 0; width: 220px; padding-top: 1rem; }
+.sidebar a { color: white; display: block; padding: 10px 15px; text-decoration: none; }
+.sidebar a:hover { background-color: #495057; }
+.content { margin-left: 220px; padding: 1rem 2rem; }
+.card-icon { font-size: 3rem; opacity: 0.2; }
+.footer { text-align: center; padding: 10px; margin-top: 40px; font-size: 0.8rem; color: #666; border-top: 1px solid #ccc; }
+</style>
+</head>
+<body>
+<nav class="navbar navbar-expand navbar-dark bg-primary fixed-top">
+<a class="navbar-brand" href="#">Monitoring</a>
+</nav>
+
+<div class="sidebar">
+<a href="#" id="menu-home"><i class="fas fa-home"></i> Home</a>
+<a href="#" id="menu-tabel"><i class="fas fa-table"></i> Tabel</a>
+<a href="#" id="menu-statistik"><i class="fas fa-chart-bar"></i> Statistik</a>
+</div>
+
+<div class="content">
+  <div id="page-home" class="page">
+    <h4>Monitoring <small class="text-muted">Suhu & Kelembapan</small></h4>
+    <div class="row my-4">
+      <div class="col-md-6">
+        <div class="card bg-info text-white">
+          <div class="card-body d-flex justify-content-between align-items-center">
+            <div><h2 id="display-temp">-- °C</h2><p>Suhu</p></div>
+            <div><i class="fas fa-thermometer-half card-icon"></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card bg-success text-white">
+          <div class="card-body d-flex justify-content-between align-items-center">
+            <div><h2 id="display-humid">-- %RH</h2><p>Kelembapan</p></div>
+            <div><i class="fas fa-tint card-icon"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card bg-warning text-white w-50 mx-auto">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div><h5 id="display-date">--</h5><p>Tanggal Update</p></div>
+        <div><i class="fas fa-calendar-check card-icon"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-tabel" class="page" style="display:none;">
+    <h4>Tabel <small class="text-muted">History Sensor</small></h4>
+    <table id="dataTable" class="table table-striped table-bordered w-100">
+      <thead><tr><th>ID</th><th>Suhu (°C)</th><th>Kelembapan (%RH)</th><th>Tanggal</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div id="page-statistik" class="page" style="display:none;">
+    <h4>Statistik <small class="text-muted">Suhu & Kelembapan</small></h4>
+    <div class="mb-5"><h5>Grafik Suhu</h5><canvas id="chartTemp"></canvas></div>
+    <div><h5>Grafik Kelembapan</h5><canvas id="chartHumid"></canvas></div>
+  </div>
+</div>
+
+<div class="footer">Copyright © 2025.kupit_3D Detector All rights reserved.</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.1/js/dataTables.bootstrap4.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// Menu navigation
+$("#menu-home").click(() => showPage('home'));
+$("#menu-tabel").click(() => showPage('tabel'));
+$("#menu-statistik").click(() => showPage('statistik'));
+function showPage(page){$(".page").hide();$("#page-"+page).show();}
+
+// DataTable
+let table = $('#dataTable').DataTable({ pageLength:10, order:[[0,"desc"]] });
+
+// Chart.js
+const ctxTemp = document.getElementById('chartTemp').getContext('2d');
+const ctxHumid = document.getElementById('chartHumid').getContext('2d');
+
+const chartTemp = new Chart(ctxTemp,{type:'line',data:{labels:[],datasets:[{label:'Suhu (°C)',data:[],borderColor:'rgba(54,162,235,1)',backgroundColor:'rgba(54,162,235,0.2)',fill:true,tension:0.25}]},options:{scales:{y:{beginAtZero:false}},responsive:true}});
+const chartHumid = new Chart(ctxHumid,{type:'line',data:{labels:[],datasets:[{label:'Kelembapan (%RH)',data:[],borderColor:'rgba(75,192,192,1)',backgroundColor:'rgba(75,192,192,0.2)',fill:true,tension:0.25}]},options:{scales:{y:{beginAtZero:false}},responsive:true}});
+
+// Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyAXS2J0OLvoCLwUwquy0xaWeSbYuHS-Gws",
+  databaseURL: "https://sensor-suhu-ad146-default-rtdb.firebaseio.com/",
+};
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const latestRef = db.ref("sensor/latest");
+const historyRef = db.ref("sensor/history");
+
+// Update latest
+function formatTimestamp(ts) {
+  if (!ts || typeof ts !== 'number') return '--';
+  const date = new Date(ts * 1000); // ubah detik → milidetik
+
+  // Tambahkan offset manual ke GMT+7 (jika server UTC)
+  const local = new Date(date.getTime() + (7 * 60 * 60 * 1000));
+
+  // Format seperti di LCD → "13/11 20:45"
+  const day = String(local.getDate()).padStart(2, '0');
+  const month = String(local.getMonth() + 1).padStart(2, '0');
+  const hours = String(local.getHours()).padStart(2, '0');
+  const minutes = String(local.getMinutes()).padStart(2, '0');
+
+  return `${day}/${month} ${hours}:${minutes}`;
+}
+
+
+latestRef.on("value", snapshot => {
+  const data = snapshot.val();
+  if (data) {
+    const suhu = (typeof data.suhu === 'number') ? data.suhu.toFixed(2) : '--';
+    const hum = (typeof data.kelembapan === 'number') ? data.kelembapan.toFixed(2) : '--';
+    const ts = data.timestamp || '--';
+    $('#display-temp').text(suhu + ' °C');
+    $('#display-humid').text(hum + ' %RH');
+    $('#display-date').text(formatTimestamp(ts));
+  }
+}); // ← ini penting, nutup blok latestRef.on()
+
+// Update tabel & chart
+historyRef.on("value", snapshot => {
+  const allData = snapshot.val();
+  table.clear();
+  chartTemp.data.labels = [];
+  chartTemp.data.datasets[0].data = [];
+  chartHumid.data.labels = [];
+  chartHumid.data.datasets[0].data = [];
+
+  if (allData) {
+    Object.keys(allData).forEach(key => {
+      const item = allData[key];
+      const suhu = (typeof item.suhu === 'number') ? item.suhu.toFixed(2) : '--';
+      const hum = (typeof item.kelembapan === 'number') ? item.kelembapan.toFixed(2) : '--';
+      const ts = item.timestamp || '--';
+      table.row.add([key, suhu, hum, formatTimestamp(ts)]);
+
+      if (typeof item.suhu === 'number') {
+        chartTemp.data.labels.push(formatTimestamp(ts));
+        chartTemp.data.datasets[0].data.push(item.suhu);
+      }
+      if (typeof item.kelembapan === 'number') {
+        chartHumid.data.labels.push(formatTimestamp(ts));
+        chartHumid.data.datasets[0].data.push(item.kelembapan);
+      }
+    });
+  }
+
+  table.draw();
+  chartTemp.update();
+  chartHumid.update();
+});
+
+$(document).ready(() => { showPage('home'); });
+
+</script>
+</body>
+</html> 
